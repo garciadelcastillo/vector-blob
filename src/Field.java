@@ -1,6 +1,7 @@
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 import processing.core.*;
@@ -16,8 +17,9 @@ public class Field {
 	Node[][] nodes;
 	Set<Node> nodesA;  // nodes on the outer boundary of an isocurve
 	Set<Node> nodesB;  // ibid for inner boundary
-	ArrayList<Vertex> blob;
 	ArrayList<Force> forces;
+	ArrayList<Vertex> blobUnsorted;
+	ArrayList<Vertex> blobSorted;
 	
 	PFont font;
 
@@ -33,11 +35,12 @@ public class Field {
 		nodesA = new HashSet<Node>();
 		nodesB = new HashSet<Node>();
 		
-		blob = new ArrayList<Vertex>();
+		blobUnsorted = new ArrayList<Vertex>();
+		blobSorted = new ArrayList<Vertex>();
 		
 		forces = new ArrayList<Force>();
-		forces.add(new Force(156, 156, 39));
-		forces.add(new Force(p.width / 2, p.height / 2, 59));
+		forces.add(new Force(156, 156, 69));
+		forces.add(new Force(p.width / 2, p.height / 2, 109));
 		
 		font = p.createFont("Arial", 7);
 
@@ -46,18 +49,22 @@ public class Field {
 	void display() {
 		p.pushStyle();
 	
-		drawForces();
-//		drawNodeDots();
+//		drawForces();
+		drawNodeDots();
 //		drawNodeValues();
 //		drawNodeBoundaries();
 //		drawBlobCurve();
-		drawBlobVertices();
+		drawBlobVertices(blobSorted, 0x7fffff00, 2);
+		drawBlobVertices(blobUnsorted, 0x7f00ffff, 0);
 		
 		p.popStyle();
 	}
 
 	void update() {
-
+		calcNodeValues();
+		loadBoundaryNodes(1.0f);
+		loadBlobUnsorted(1.0f);
+		loadBlobSorted(1.0f);
 	}
 	
 	void calcNodeValues() {
@@ -97,15 +104,55 @@ public class Field {
 	 * iterate over inner boundary nodes, check if any neighbor is in the outer boundary, and if so, add an interpolated point to the blob
 	 * @param threshold
 	 */
-	void loadBlob(float threshold) {
-		blob.clear();
+	void loadBlobUnsorted(float threshold) {
+		blobUnsorted.clear();
 		for (Node n : nodesB) {
 			for (int k = 0; k < 4; k++) {
-			  if (n.nv[k] != null && nodesA.contains(n.nv[k]))
-				  blob.add(interpolateNodes(n.nv[k], n, threshold));
+				if (n.nv[k] != null && nodesA.contains(n.nv[k]))
+					blobUnsorted.add(interpolateNodes(n.nv[k], n, threshold));
 			}
 		}
+//		p.println(blobUnsorted.size());
 	}
+	
+	void loadBlobSorted(float threshold) {
+		blobSorted.clear();
+		LinkedHashSet<Node> parsed = new LinkedHashSet<Node>();  // nodes in B that were already searched
+		
+		Node node = nodesB.iterator().next();  // grab a random node
+		int rotor = 64;  // int counter for 90 deg cw turns on node search
+		int iterator = 0;
+		// start checking its neighbors
+		while (iterator < nodesB.size()){
+			for (int k = 0; k < 4; k++) {
+				int rot = rotor % 4;  // find relative rotor rotation (0 up, 1 left, etc)
+				if (node.nv[rot] == null) {   // if border node
+					rotor++;  // advance the cw rotation counter and do nothing
+				} else if (nodesA.contains(node.nv[rot])) {  // if neighbor was boundary below threshold (AA)
+					blobSorted.add(interpolateNodes(node.nv[rot], node, threshold));  // add the interpolation to the blob
+					rotor++;  // advance the cw rotation counter
+				} else if (nodesB.contains(node.nv[rot])) {  // if neighbor is boundary over threshold (BB)
+					node = node.nv[rot];  // change and check that node
+					// do not advance rotor, check same previous orientation
+				} else {  // if here, neighbor must be inner non-boundary (B)
+					// pivot CCW around last AA found and select the next BB
+					Node AA = node.nv[(rotor-1)%4];
+					if (AA.nv[rot] != null) {
+						Node BB = AA.nv[rot];  // do sanity here
+						node = BB;
+					}
+					rotor--;
+				}
+			}
+			iterator++;
+		}
+//		p.println(blobSorted.size());
+		
+	}
+	
+	
+	
+	
 	
 	Vertex interpolateNodes(Node nA, Node nB, float threshold) {
 		float x = nA.x + (nB.x - nA.x) * (threshold - nA.val) / (nB.val - nA.val);
@@ -117,7 +164,7 @@ public class Field {
 		p.fill(255, 0, 0);
 		for (int i = 0; i < px; i++) {
 			for (int j = 0; j < py; j++) {
-				p.ellipse(nodes[i][j].x, nodes[i][j].y, 1, 1);
+				p.ellipse(nodes[i][j].x, nodes[i][j].y, .5f, .5f);
 			}
 		}
 	}
@@ -131,10 +178,21 @@ public class Field {
 			p.ellipse(nB.x, nB.y, 2, 2);
 	}
 	
-	void drawBlobVertices() {
-		p.fill(0, 255, 255);
+//	void drawBlobVertices() {
+////		p.textFont(font);
+//		int count = 0;
+//		p.fill(0, 255, 255);
+//		for (Vertex v : blobSorted) {
+//			p.ellipse(v.x, v.y, 2, 2);
+////			p.text(count, v.x+count, v.y+count);
+//			count++;
+//		}
+//	}
+	
+	void drawBlobVertices(ArrayList<Vertex> blob, int color, int offset) {
+		p.fill(color);
 		for (Vertex v : blob) {
-			p.ellipse(v.x, v.y, 2, 2);
+			p.ellipse(v.x + offset, v.y + offset, 2, 2);
 		}
 	}
 	
@@ -144,7 +202,7 @@ public class Field {
 		p.stroke(255);
 		p.strokeWeight(1);
 		p.beginShape();
-		for (Vertex v : blob) {
+		for (Vertex v : blobSorted) {
 			p.curveVertex(v.x, v.y);
 		}
 		p.endShape();

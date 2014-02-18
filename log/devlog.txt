@@ -10,8 +10,8 @@ GLOBAL PSEUDO
 		. provided we have a Field, Forces and want to find the points to form isocurves:
 		. calculate global potential sum for all FieldPoints
 		. find A' and B' points (those who are cardinally neighbours to points over/under the threshold value, usually 1)
-		. go over all A' points
-			. find their B' neighbors
+		. go over all B' points
+			. find their A' neighbors
 			. interpolate between potential values to aprox find the xy point with potential == threshold
 	. IMPROVEMENTS
 		. do the A'-B' interpolation in sorted order to create a curve between them
