@@ -9,10 +9,11 @@ import processing.core.*;
 public class Field {
 	PApplet p;
 
-	public static final int RESOLUTION = 10;  // pixels between FieldPoint samples
+	public static final int RESOLUTION = 5;  // pixels between FieldPoint samples
 	public static final float POTENTIAL_CUTOFF = 0.01f;  // a threshold below which the force doesn't contribute to the field
 	public static final int A = 0, AA = 1, BB = 2, B = 3;  // node flags: external to blob, adjacent to external boundary of blob, adjacent to internal boundary, internal
 	int pCount, px, py;  // number of points total + XY directions
+	float iso = 1.0f;
 
 	Node[][] nodes;
 	Set<Node> nodesA;  // nodes on the outer boundary of an isocurve
@@ -55,13 +56,13 @@ public class Field {
 		p.pushStyle();
 	
 //		drawForces();
-		drawNodeDots();
+//		drawNodeDots();
 //		drawNodeValues();
 //		drawNodeBoundaries();
-		drawBlobVertices(blobUnsorted, 1, 0x7f00ffff, 0, false);
-		drawBlobVertices(blobSorted, 2, 0x7fffff00, 0, false);
-		drawNodeList(tempFirstCheckedNode, 4, 0xffff0000, 0);
+//		drawBlobVertices(blobUnsorted, 1, 0x7f00ffff, 0, false);
+		drawNodeList(tempFirstCheckedNode, 1, 0xffff0000, 0);
 //		drawNodeList(tempCheckedNodes, 2, 0xffffffff, 0);
+//		drawBlobVertices(blobSorted, 2, 0x7fffff00, 0, false);
 		drawBlobCurve(blobSorted);
 		
 		p.popStyle();
@@ -69,9 +70,9 @@ public class Field {
 
 	void update() {
 		calcNodeValues();
-		loadBoundaryNodes(1.0f);
-		loadBlobUnsorted(1.0f);
-		loadBlobSorted(1.0f);
+		loadBoundaryNodes(iso);
+		loadBlobUnsorted(iso);
+		loadBlobSorted(iso);
 	}
 	
 	void calcNodeValues() {
@@ -152,9 +153,13 @@ public class Field {
 //		parsed.add(node);
 		
 		boolean stop = false;
-		
+		// then start big iteration jumping into next available node
 		rotor = initRot + 1;
-		while (!stop ) {
+		while (!stop) {
+			if (parsed.contains(node)) {
+				stop = true;
+				continue;
+			}
 			for (int k = 0; k < 4; k++) {
 				int rot = rotor % 4;  // find relative rotor rotation (0 up, 1 left, etc)
 				if (node.nv[rot] == null) {   // if border node
@@ -163,24 +168,24 @@ public class Field {
 					blobSorted.add(interpolateNodes(node.nv[rot], node, threshold));  // add the interpolation to the blob
 					rotor++;
 				} else if (nodesB.contains(node.nv[rot])) {  // if neighbor i a BB one
-					parsed.add(node);  // archive this node
-					node = node.nv[rot];  // jump to that node
-					if (parsed.contains(node)) {  // if have been here already
-						stop = true;  // get the hell outtahere
+					if (parsed.contains(node)) {
+						stop = true;
 						break;
 					}
+					parsed.add(node);  // archive this node
+					node = node.nv[rot];  // jump to that node
 					rotor--;  // check paralel to previous orientation
 					break;  // stop this for loop
 				} else {  // if here, neighbor must (presumably) be inner non-boundary (B)
 					// pivot CCW around last AA found and select the next BB
 					parsed.add(node);  // archive this node
 					Node AA;
-					if (node.nv[rotor%4] != null) {
+					if (node.nv[(rotor-1)%4] != null) {
 						AA = node.nv[(rotor-1)%4];
 					} else {  // grab last not accepted node
 						stop = true;  // get the hell outtahere
 						break;
-					}
+					} 
 					if (AA.nv[rot] != null) {
 						node = AA.nv[rot];  // TODO apply sanity here
 						rotor -= 2;
@@ -194,36 +199,16 @@ public class Field {
 			i++;
 		}
 		
+		// close the spline --> should be applied only if last checked node was already checked
+		blobSorted.add(blobSorted.get(0));
+		blobSorted.add(blobSorted.get(1));
+		
+		
 		tempClosed = parsed.size() == nodesB.size();
 		
 		tempIterations = i;
 		tempCheckedNodes = parsed;
-		
-//		while (i < nodesB.size()){
-//			for (int k = 0; k < 4; k++) {
-//				int rot = rotor % 4;  // find relative rotor rotation (0 up, 1 left, etc)
-//				if (node.nv[rot] == null) {   // if border node
-//					rotor++;  // advance the cw rotation counter and do nothing
-//				} else if (nodesA.contains(node.nv[rot])) {  // if neighbor was boundary below threshold (AA)
-//					blobSorted.add(interpolateNodes(node.nv[rot], node, threshold));  // add the interpolation to the blob
-//					rotor++;  // advance the cw rotation counter
-//				} else if (nodesB.contains(node.nv[rot])) {  // if neighbor is boundary over threshold (BB)
-//					parsed.add(node);
-//					node = node.nv[rot];  // change and check that node
-//					// do not advance rotor, check same previous orientation
-//				} else {  // if here, neighbor must be inner non-boundary (B)
-//					// pivot CCW around last AA found and select the next BB
-//					Node AA = node.nv[(rotor-1)%4];
-//					if (AA.nv[rot] != null) {
-//						Node BB = AA.nv[rot];  // do sanity here
-//						node = BB;
-//					}
-//					rotor--;
-//				}
-//			}
-//			i++;
-//		}
-		
+	
 		
 	}
 	
@@ -289,6 +274,7 @@ public class Field {
 	void drawBlobCurve(ArrayList<Vertex> blob) {
 		p.pushStyle();
 		p.noFill();
+//		p.fill(127, 127);
 		p.stroke(255);
 		p.strokeWeight(1);
 		p.beginShape();

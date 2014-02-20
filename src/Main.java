@@ -1,5 +1,6 @@
 
 import processing.core.*;
+import processing.event.MouseEvent;
 
 @SuppressWarnings("serial")
 public class Main extends PApplet {
@@ -29,6 +30,7 @@ public class Main extends PApplet {
 	public void drawDebugText() {
 		pushStyle();
 		fill(255);
+		text("fps: " + (int) (frameRate), 100, 10);
 		text(field.blobSorted.size(), 10, 10);
 		text("iterations: " + field.tempIterations, 10, 20);
 		text("closed: " + field.tempClosed, 10, 30);
@@ -42,6 +44,15 @@ public class Main extends PApplet {
 		field.forces.get(0).setXY(mouseX, mouseY);
 		field.update();
 		super.mouseMoved();
+	}
+	
+	public void mouseWheel(MouseEvent event) {
+		if (event.getAmount() < 0) {
+			field.iso -= 0.1f;
+		} else {
+			field.iso += 0.1f;
+		}
+		field.update();
 	}
 	
 	public void keyPressed() {
